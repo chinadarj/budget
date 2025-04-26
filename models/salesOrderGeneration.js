@@ -5,6 +5,6 @@ const salesOrderGenerationSchema = new mongoose.Schema({
     created_at: { type: Date, default: Date.now },
     updated_at: { type: Date },
     status: { type: Number },
-}, { collection: 'sale_order_generation' });
+}, { collection: 'sales_order_generation' });
 
 module.exports = mongoose.model('SalesOrderGeneration', salesOrderGenerationSchema, 'sales_order_generation');

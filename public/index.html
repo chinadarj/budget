@@ -26,6 +26,10 @@
         <button type="submit">Upload Warehouse Report</button>
     </form>
 
+    <!-- Generate button -->
+    <h2>Generate Sales Order</h2>
+    <button id="generate-button">Generate</button>
+
     <script>
         // Populate branch dropdown
         fetch('http://localhost:3000/api/branches')
@@ -40,6 +44,10 @@
                 });
             });
 
+        // Temporary storage for uploaded files
+        let uploadedSalesFile = null;
+        let uploadedWarehouseFile = null;
+
         // Handle sales report upload
         document.getElementById('sales-form').addEventListener('submit', event => {
             event.preventDefault();
@@ -47,12 +55,15 @@
             const formData = new FormData();
             formData.append('file', fileInput.files[0]);
 
-            fetch('http://localhost:3000/api/upload/sales', {
+            fetch('http://localhost:3000/api/upload/temp', {
                 method: 'POST',
                 body: formData,
             })
-            .then(response => response.text())
-            .then(alert)
+            .then(response => response.json())
+            .then(data => {
+                alert('Sales report uploaded successfully!');
+                uploadedSalesFile = data.tempFilePath; // Save the temporary file path
+            })
             .catch(console.error);
         });
 
@@ -63,12 +74,47 @@
             const formData = new FormData();
             formData.append('file', fileInput.files[0]);
 
-            fetch('http://localhost:3000/api/upload/warehouse', {
+            fetch('http://localhost:3000/api/upload/temp', {
                 method: 'POST',
                 body: formData,
             })
-            .then(response => response.text())
-            .then(alert)
+            .then(response => response.json())
+            .then(data => {
+                alert('Warehouse report uploaded successfully!');
+                uploadedWarehouseFile = data.tempFilePath; // Save the temporary file path
+            })
+            .catch(console.error);
+        });
+
+        // Handle generate button click
+        document.getElementById('generate-button').addEventListener('click', () => {
+            const branchId = document.getElementById('branch').value;
+
+            if (!branchId) {
+                alert('Please select a branch');
+                return;
+            }
+
+            if (!uploadedSalesFile || !uploadedWarehouseFile) {
+                alert('Please upload both sales and warehouse reports');
+                return;
+            }
+
+            fetch('http://localhost:3000/api/generate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    branch_id: branchId,
+                    salesFilePath: uploadedSalesFile,
+                    warehouseFilePath: uploadedWarehouseFile,
+                }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert(data.message);
+            })
             .catch(console.error);
         });
     </script>

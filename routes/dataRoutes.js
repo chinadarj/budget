@@ -4,6 +4,8 @@ const XLSX = require('xlsx');
 const Branch = require('../models/branch');
 const SalesReport = require('../models/salesReport'); // Corrected path
 const WarehouseReport = require('../models/warehouseReport'); // Corrected path
+const SalesOrderGeneration = require('../models/salesOrderGeneration');
+
 const mongoose = require('mongoose');
 
 const router = express.Router();
@@ -26,6 +28,13 @@ router.get('/branches', async (req, res) => {
         console.error('Error in API:', err);
         res.status(500).json({ message: 'Server Error' });
     }
+});
+
+router.post('/upload/temp', upload.single('file'), (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ message: 'No file uploaded' });
+    }
+    res.status(200).json({ tempFilePath: req.file.path });
 });
 
 // Route to upload and process sales report
@@ -115,5 +124,90 @@ router.post('/upload/warehouse', upload.single('file'), async (req, res) => {
         res.status(500).json({ message: 'Error processing warehouse report' });
     }
 });
+
+
+
+router.post('/generate', async (req, res) => {
+    try {
+        const { branch_id, salesFilePath, warehouseFilePath } = req.body;
+
+        if (!branch_id || !salesFilePath || !warehouseFilePath) {
+            console.error('Missing required fields:', { branch_id, salesFilePath, warehouseFilePath });
+            return res.status(400).json({ message: 'Missing required fields' });
+        }
+
+        if (!mongoose.Types.ObjectId.isValid(branch_id)) {
+            return res.status(400).json({ message: 'Invalid branch ID' });
+        }
+
+        console.log('Received request:', { branch_id, salesFilePath, warehouseFilePath });
+
+        // Create a new entry in salesOrderGeneration collection
+        const salesOrder = await SalesOrderGeneration.create({
+            branch_id: new mongoose.Types.ObjectId(branch_id), // Use 'new' here
+            created_at: new Date(),
+            updated_at: new Date(),
+            status: 1,
+        });
+
+        console.log('Sales order created:', salesOrder);
+
+        // Process sales file
+        const salesWorkbook = XLSX.readFile(salesFilePath);
+        const salesSheet = salesWorkbook.Sheets[salesWorkbook.SheetNames[0]];
+        const salesData = XLSX.utils.sheet_to_json(salesSheet, { header: 0, raw: true }).slice(2);
+
+        const salesReports = salesData.map(row => ({
+            item_name: row['__EMPTY_1'],
+            packs: row['__EMPTY_2'] ?? 0,
+            qty: row['__EMPTY_3'] ?? 0,
+            stock: row['__EMPTY_4'] ?? 0,
+            bill_count: row['__EMPTY_5'] ?? 0,
+            code: row['__EMPTY'] ?? null,
+            branch_id: new mongoose.Types.ObjectId(branch_id), // Use 'new' here
+            sales_order_generation_id: salesOrder._id, // Link the generated ID
+        }));
+        await SalesReport.insertMany(salesReports);
+
+        console.log('Sales data saved successfully.');
+
+        // Process warehouse file
+        const warehouseWorkbook = XLSX.readFile(warehouseFilePath);
+        const warehouseSheet = warehouseWorkbook.Sheets[warehouseWorkbook.SheetNames[0]];
+        const warehouseData = XLSX.utils.sheet_to_json(warehouseSheet, { header: 0, raw: true }).slice(2);
+
+     
+        const warehouseReports = warehouseData.map(row => {
+            if (row['__EMPTY'] && row['__EMPTY_1'] && row['__EMPTY_2'] && row['__EMPTY_3'] && row['__EMPTY_4']) {
+                return {
+                    bill_no: row['__EMPTY'] || 'Unknown', // Add a fallback value if needed
+                    bill_date: row['__EMPTY_1'] || null, // Ensure date is properly formatted
+                    item_name: row['__EMPTY_2'] || 'Unknown Item',
+                    packing: row['__EMPTY_3'] || 'N/A',
+                    quantity: row['__EMPTY_4'] || 0,
+                    free_quantity: row['__EMPTY_5'] || 0,
+                    amount: row['__EMPTY_6'] || 0,
+                    branch_id: new mongoose.Types.ObjectId(branch_id),
+                    sales_order_generation_id: salesOrder._id,
+                };
+            } else {
+                console.error('Incomplete row:', row); // Log incomplete rows for debugging
+                return null; // Exclude incomplete rows
+            }
+        }).filter(Boolean); // Remove null entries
+
+        await WarehouseReport.insertMany(warehouseReports);
+
+        console.log('Warehouse data saved successfully.');
+
+        res.status(200).json({ message: 'Sales order generated successfully' });
+    } catch (err) {
+        console.error('Error during generation:', err);
+        res.status(500).json({ message: 'Internal server error', error: err.message });
+    }
+});
+
+
+
 
 module.exports = router;
