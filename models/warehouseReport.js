@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const warehouseReportSchema = new mongoose.Schema({
     sales_order_generation_id: { type: mongoose.Schema.Types.ObjectId, ref: 'SalesOrderGeneration' },
     bill_no: { type: String, required: true },
-    bill_date: { type: String, required: true },
+    bill_date: { type: Date, required: false }, // Change to optional
     item_name: { type: String, required: true },
     packing: { type: String, required: true },
     quantity: { type: String, required: true },

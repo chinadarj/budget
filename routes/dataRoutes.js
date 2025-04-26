@@ -132,7 +132,6 @@ router.post('/generate', async (req, res) => {
         const { branch_id, salesFilePath, warehouseFilePath } = req.body;
 
         if (!branch_id || !salesFilePath || !warehouseFilePath) {
-            console.error('Missing required fields:', { branch_id, salesFilePath, warehouseFilePath });
             return res.status(400).json({ message: 'Missing required fields' });
         }
 
@@ -140,19 +139,15 @@ router.post('/generate', async (req, res) => {
             return res.status(400).json({ message: 'Invalid branch ID' });
         }
 
-        console.log('Received request:', { branch_id, salesFilePath, warehouseFilePath });
-
-        // Create a new entry in salesOrderGeneration collection
+        // Create a new sales order generation entry
         const salesOrder = await SalesOrderGeneration.create({
-            branch_id: new mongoose.Types.ObjectId(branch_id), // Use 'new' here
+            branch_id: new mongoose.Types.ObjectId(branch_id),
             created_at: new Date(),
             updated_at: new Date(),
             status: 1,
         });
 
-        console.log('Sales order created:', salesOrder);
-
-        // Process sales file
+        // Process and save sales report
         const salesWorkbook = XLSX.readFile(salesFilePath);
         const salesSheet = salesWorkbook.Sheets[salesWorkbook.SheetNames[0]];
         const salesData = XLSX.utils.sheet_to_json(salesSheet, { header: 0, raw: true }).slice(2);
@@ -163,25 +158,24 @@ router.post('/generate', async (req, res) => {
             qty: row['__EMPTY_3'] ?? 0,
             stock: row['__EMPTY_4'] ?? 0,
             bill_count: row['__EMPTY_5'] ?? 0,
-            code: row['__EMPTY'] ?? null,
-            branch_id: new mongoose.Types.ObjectId(branch_id), // Use 'new' here
-            sales_order_generation_id: salesOrder._id, // Link the generated ID
+            code: row['__EMPTY'] ?? 'Unknown',
+            branch_id: new mongoose.Types.ObjectId(branch_id),
+            sales_order_generation_id: salesOrder._id,
         }));
+
         await SalesReport.insertMany(salesReports);
 
-        console.log('Sales data saved successfully.');
-
-        // Process warehouse file
+        // Process and save warehouse report
         const warehouseWorkbook = XLSX.readFile(warehouseFilePath);
         const warehouseSheet = warehouseWorkbook.Sheets[warehouseWorkbook.SheetNames[0]];
         const warehouseData = XLSX.utils.sheet_to_json(warehouseSheet, { header: 0, raw: true }).slice(2);
 
-     
         const warehouseReports = warehouseData.map(row => {
             if (row['__EMPTY'] && row['__EMPTY_1'] && row['__EMPTY_2'] && row['__EMPTY_3'] && row['__EMPTY_4']) {
+                const billDate = new Date(row['__EMPTY_1']); // Attempt to parse date
                 return {
-                    bill_no: row['__EMPTY'] || 'Unknown', // Add a fallback value if needed
-                    bill_date: row['__EMPTY_1'] || null, // Ensure date is properly formatted
+                    bill_no: row['__EMPTY'] || 'Unknown',
+                    bill_date: isNaN(billDate) ? null : billDate, // Validate date
                     item_name: row['__EMPTY_2'] || 'Unknown Item',
                     packing: row['__EMPTY_3'] || 'N/A',
                     quantity: row['__EMPTY_4'] || 0,
@@ -190,22 +184,66 @@ router.post('/generate', async (req, res) => {
                     branch_id: new mongoose.Types.ObjectId(branch_id),
                     sales_order_generation_id: salesOrder._id,
                 };
-            } else {
-                console.error('Incomplete row:', row); // Log incomplete rows for debugging
-                return null; // Exclude incomplete rows
             }
-        }).filter(Boolean); // Remove null entries
+            return null;
+        }).filter(row => row && row.bill_date); // Filter out invalid rows
+        
 
         await WarehouseReport.insertMany(warehouseReports);
 
-        console.log('Warehouse data saved successfully.');
+        // Calculate required stock
+        const outputData = [];
+        for (const salesRow of salesReports) {
+            const warehouseRow = warehouseReports.find(w => w.item_name === salesRow.item_name);
+            const currentStock = salesRow.stock + (warehouseRow?.quantity || 0);
+            const salesQty = salesRow.qty;
+            const billCount = salesRow.bill_count;
 
-        res.status(200).json({ message: 'Sales order generated successfully' });
+            let requiredStock = 0;
+            if (billCount > 0) {
+                const stockPer = currentStock / salesQty;
+                let predication = 0;
+
+                if (salesQty > 60) {
+                    predication = (12 / 61) * 100;
+                    requiredStock = stockPer > predication ? 0 : (salesQty * (18 / 61)) - currentStock;
+                } else if (salesQty > 6) {
+                    predication = (15 / 61) * 100;
+                    requiredStock = stockPer > predication ? 0 : (salesQty * (38 / 61)) - currentStock;
+                } else {
+                    predication = (29.9 / 61) * 100;
+                    requiredStock = stockPer > predication ? 0 : (salesQty * (55 / 61)) - currentStock;
+                }
+
+                requiredStock = Math.max(0, requiredStock); // Ensure non-negative stock
+            }
+
+            if (requiredStock > 0) {
+                outputData.push({
+                    code: salesRow.code,
+                    requiredStock,
+                });
+            }
+        }
+
+        // Generate Excel output
+        const outputSheet = XLSX.utils.json_to_sheet(outputData);
+        const outputWorkbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(outputWorkbook, outputSheet, 'RequiredStock');
+        const outputFilePath = `output/RequiredStock_${Date.now()}.xlsx`;
+        XLSX.writeFile(outputWorkbook, outputFilePath);
+
+        res.status(200).json({
+            message: 'Sales order generated successfully',
+            outputFilePath,
+        });
     } catch (err) {
         console.error('Error during generation:', err);
         res.status(500).json({ message: 'Internal server error', error: err.message });
     }
 });
+
+
 
 
 
