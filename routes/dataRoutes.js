@@ -191,37 +191,52 @@ router.post('/generate', async (req, res) => {
 
         await WarehouseReport.insertMany(warehouseReports);
 
+        const predicationGT60 = (12 / 61) * 100;
+        const predicationLT60 = (15 / 61) * 100;
+        const predicationLT6 = (29.9 / 61) * 100;
+
+
         // Calculate required stock
         const outputData = [];
         for (const salesRow of salesReports) {
             const warehouseRow = warehouseReports.find(w => w.item_name === salesRow.item_name);
-            const currentStock = salesRow.stock + (warehouseRow?.quantity || 0);
+            const currentStock = salesRow.stock 
             const salesQty = salesRow.qty;
             const billCount = salesRow.bill_count;
-
+            const packing = salesRow.packs;
+            const warehouseQty = (warehouseRow?.quantity * packing || 0);
+            const actualStock =   currentStock +  warehouseQty;  
             let requiredStock = 0;
-            if (billCount > 0) {
-                const stockPer = currentStock / salesQty;
-                let predication = 0;
-
+            if (billCount > 1) {
+                const stockPer = (actualStock / salesQty)*100;
                 if (salesQty > 60) {
-                    predication = (12 / 61) * 100;
-                    requiredStock = stockPer > predication ? 0 : (salesQty * (18 / 61)) - currentStock;
+                    requiredStock = stockPer > predicationGT60 ? 0 : (salesQty * (18 / 61)) - actualStock ;
                 } else if (salesQty > 6) {
-                    predication = (15 / 61) * 100;
-                    requiredStock = stockPer > predication ? 0 : (salesQty * (38 / 61)) - currentStock;
+                    requiredStock = stockPer > predicationLT60 ? 0 : (salesQty * (38 / 61)) - actualStock;
                 } else {
-                    predication = (29.9 / 61) * 100;
-                    requiredStock = stockPer > predication ? 0 : (salesQty * (55 / 61)) - currentStock;
+                    requiredStock = stockPer > predicationLT6 ? 0 : (salesQty * (55 / 61)) - actualStock;
                 }
-
+                
                 requiredStock = Math.max(0, requiredStock); // Ensure non-negative stock
-            }
+                requiredStock = (packing > 1 && packing < 31) 
+                    ? (requiredStock + currentStock < 4 ? 5 - currentStock : requiredStock) 
+                    : requiredStock;
+                    
+                    
+                    requiredStock = Math.ceil(requiredStock / packing) * packing;
+                }
 
             if (requiredStock > 0) {
                 outputData.push({
+                    productName:salesRow.item_name,
                     code: salesRow.code,
                     requiredStock,
+                    actualStock,
+                    salesQty,
+                    currentStock,
+                    warehouseQty,
+                    packing,
+
                 });
             }
         }
