@@ -26,6 +26,13 @@
         <button type="submit">Upload Warehouse Report</button>
     </form>
 
+    <!-- Upload Removed Items -->
+    <h2>Upload Removed Items</h2>
+    <form id="removed-items-form">
+        <input type="file" id="removed-file" name="file" accept=".xls,.xlsx" required />
+        <button type="submit">Upload Removed Item List</button>
+    </form>
+
     <!-- Generate button -->
     <h2>Generate Sales Order</h2>
     <button id="generate-button">Generate</button>
@@ -47,6 +54,7 @@
         // Temporary storage for uploaded files
         let uploadedSalesFile = null;
         let uploadedWarehouseFile = null;
+        let uploadedRemoveFile = null;
 
         // Handle sales report upload
         document.getElementById('sales-form').addEventListener('submit', event => {
@@ -86,6 +94,26 @@
             .catch(console.error);
         });
 
+
+        // Handle removed items upload
+        document.getElementById('removed-items-form').addEventListener('submit', event => {
+            event.preventDefault();
+            const fileInput = document.getElementById('removed-file');
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            fetch('http://localhost:3000/api/upload/temp', {
+                method: 'POST',
+                body: formData,
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert('remvoed itemd uploaded successfully!');
+                uploadedRemoveFile = data.tempFilePath; // Save the temporary file path
+            })
+            .catch(console.error);
+        });
+
         // Handle generate button click
         document.getElementById('generate-button').addEventListener('click', () => {
             const branchId = document.getElementById('branch').value;
@@ -109,6 +137,7 @@
                     branch_id: branchId,
                     salesFilePath: uploadedSalesFile,
                     warehouseFilePath: uploadedWarehouseFile,
+                    removedFilePath : uploadedRemoveFile,
                 }),
             })
             .then(response => response.json())

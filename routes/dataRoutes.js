@@ -7,6 +7,7 @@ const WarehouseReport = require('../models/warehouseReport'); // Corrected path
 const SalesOrderGeneration = require('../models/salesOrderGeneration');
 
 const mongoose = require('mongoose');
+const PriorityItems = require('../models/priorityItems');
 
 const router = express.Router();
 const upload = multer({ dest: 'uploads/' });
@@ -127,126 +128,205 @@ router.post('/upload/warehouse', upload.single('file'), async (req, res) => {
 
 
 
-router.post('/generate', async (req, res) => {
-    try {
-        const { branch_id, salesFilePath, warehouseFilePath } = req.body;
+// Helper Functions
 
-        if (!branch_id || !salesFilePath || !warehouseFilePath) {
-            return res.status(400).json({ message: 'Missing required fields' });
-        }
+// Validates incoming request
+const validateRequest = (branch_id, salesFilePath, warehouseFilePath) => {
+    if (!branch_id || !salesFilePath || !warehouseFilePath) {
+        throw new Error('Missing required fields');
+    }
 
-        if (!mongoose.Types.ObjectId.isValid(branch_id)) {
-            return res.status(400).json({ message: 'Invalid branch ID' });
-        }
+    if (!mongoose.Types.ObjectId.isValid(branch_id)) {
+        throw new Error('Invalid branch ID');
+    }
+};
 
-        // Create a new sales order generation entry
-        const salesOrder = await SalesOrderGeneration.create({
-            branch_id: new mongoose.Types.ObjectId(branch_id),
-            created_at: new Date(),
-            updated_at: new Date(),
-            status: 1,
+// Reads and parses an Excel file
+const readExcelFile = (filePath, sheetIndex = 0, startRow = 0) => {
+    const workbook = XLSX.readFile(filePath);
+    const sheet = workbook.Sheets[workbook.SheetNames[sheetIndex]];
+    return XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true }).slice(startRow);
+};
+
+// Creates a new Sales Order entry
+const createSalesOrder = async (branch_id) => {
+    return await SalesOrderGeneration.create({
+        branch_id: new mongoose.Types.ObjectId(branch_id),
+        created_at: new Date(),
+        updated_at: new Date(),
+        status: 1,
+    });
+};
+
+// Processes sales data into the desired format
+const processSalesReport = (salesData, headers, branch_id, salesOrderId) => {
+    return salesData
+        .filter(row => row[headers.indexOf('Product Name')]?.trim() !== '')
+        .map(row => {
+            const rowData = {};
+            headers.forEach((header, index) => {
+                rowData[header] = row[index] ?? null;
+            });
+
+            return {
+                category: rowData['Category'] ?? 'Unknown',
+                code: rowData['Code'] ?? 'Unknown',
+                item_name: rowData['Product Name'],
+                packs: rowData['Packs'] ?? 0,
+                qty: rowData['SaleQty'] ?? 0,
+                stock: rowData['CurrentStock'] ?? 0,
+                bill_count: rowData['BillCount'] ?? 0,
+                branch_id: new mongoose.Types.ObjectId(branch_id),
+                sales_order_generation_id: salesOrderId,
+            };
         });
+};
 
-        // Process and save sales report
-        const salesWorkbook = XLSX.readFile(salesFilePath);
-        const salesSheet = salesWorkbook.Sheets[salesWorkbook.SheetNames[0]];
-        const salesData = XLSX.utils.sheet_to_json(salesSheet, { header: 0, raw: true }).slice(2);
-
-        const salesReports = salesData.map(row => ({
-            item_name: row['__EMPTY_1'],
-            packs: row['__EMPTY_2'] ?? 0,
-            qty: row['__EMPTY_3'] ?? 0,
-            stock: row['__EMPTY_4'] ?? 0,
-            bill_count: row['__EMPTY_5'] ?? 0,
-            code: row['__EMPTY'] ?? 'Unknown',
-            branch_id: new mongoose.Types.ObjectId(branch_id),
-            sales_order_generation_id: salesOrder._id,
-        }));
-
-        await SalesReport.insertMany(salesReports);
-
-        // Process and save warehouse report
-        const warehouseWorkbook = XLSX.readFile(warehouseFilePath);
-        const warehouseSheet = warehouseWorkbook.Sheets[warehouseWorkbook.SheetNames[0]];
-        const warehouseData = XLSX.utils.sheet_to_json(warehouseSheet, { header: 0, raw: true }).slice(2);
-
-        const warehouseReports = warehouseData.map(row => {
-            if (row['__EMPTY'] && row['__EMPTY_1'] && row['__EMPTY_2'] && row['__EMPTY_3'] && row['__EMPTY_4']) {
-                const billDate = new Date(row['__EMPTY_1']); // Attempt to parse date
+// Processes warehouse data into the desired format
+const processWarehouseReport = (warehouseData, branch_id, salesOrderId) => {
+    return warehouseData
+        .map(row => {
+            const billDate = new Date(row['__EMPTY_1']);
+            if (row['__EMPTY'] && !isNaN(billDate)) {
                 return {
                     bill_no: row['__EMPTY'] || 'Unknown',
-                    bill_date: isNaN(billDate) ? null : billDate, // Validate date
+                    bill_date: billDate,
                     item_name: row['__EMPTY_2'] || 'Unknown Item',
                     packing: row['__EMPTY_3'] || 'N/A',
                     quantity: row['__EMPTY_4'] || 0,
                     free_quantity: row['__EMPTY_5'] || 0,
                     amount: row['__EMPTY_6'] || 0,
                     branch_id: new mongoose.Types.ObjectId(branch_id),
-                    sales_order_generation_id: salesOrder._id,
+                    sales_order_generation_id: salesOrderId,
                 };
             }
             return null;
-        }).filter(row => row && row.bill_date); // Filter out invalid rows
-        
+        })
+        .filter(row => row);
+};
 
-        await WarehouseReport.insertMany(warehouseReports);
+// Calculates required stock
+const calculateRequiredStock = (salesReports, warehouseReports, removedData, predicationParams,priorityItems) => {
+    const { predicationGT60, predicationLT60, predicationLT6 } = predicationParams;
 
-        const predicationGT60 = (12 / 61) * 100;
-        const predicationLT60 = (15 / 61) * 100;
-        const predicationLT6 = (29.9 / 61) * 100;
+    const outputData = [];
+    for (const salesRow of salesReports) {
+        let reason = "";
 
+        const isRemoved = removedData.some(([removedName]) => removedName === salesRow.item_name);
+        if (isRemoved) continue;
 
-        // Calculate required stock
-        const outputData = [];
-        for (const salesRow of salesReports) {
-            const warehouseRow = warehouseReports.find(w => w.item_name === salesRow.item_name);
-            const currentStock = salesRow.stock 
-            const salesQty = salesRow.qty;
-            const billCount = salesRow.bill_count;
-            const packing = salesRow.packs;
-            const warehouseQty = (warehouseRow?.quantity * packing || 0);
-            const actualStock =   currentStock +  warehouseQty;  
-            let requiredStock = 0;
-            if (billCount > 1) {
-                const stockPer = (actualStock / salesQty)*100;
-                if (salesQty > 60) {
-                    requiredStock = stockPer > predicationGT60 ? 0 : (salesQty * (18 / 61)) - actualStock ;
-                } else if (salesQty > 6) {
-                    requiredStock = stockPer > predicationLT60 ? 0 : (salesQty * (38 / 61)) - actualStock;
-                } else {
-                    requiredStock = stockPer > predicationLT6 ? 0 : (salesQty * (55 / 61)) - actualStock;
-                }
-                
-                requiredStock = Math.max(0, requiredStock); // Ensure non-negative stock
-                requiredStock = (packing > 1 && packing < 31) 
-                    ? (requiredStock + currentStock < 4 ? 5 - currentStock : requiredStock) 
-                    : requiredStock;
-                    
-                    
-                    requiredStock = Math.ceil(requiredStock / packing) * packing;
-                }
+        const warehouseRow = warehouseReports.find(w => w.item_name === salesRow.item_name);
+        const currentStock = salesRow.stock;
+        const salesQty = salesRow.qty;
+        const billCount = salesRow.bill_count;
+        const packing = salesRow.packs;
+        const warehouseQty = (warehouseRow?.quantity * packing || 0);
+        const actualStock = currentStock + warehouseQty;
+        let requiredStock = 0;
+        const category = salesRow.category;
+        let roundedToPacksLoose = 0;
+        let wholesalePacks = 0;
+        let actualPacksRequired = 0;
 
-            if (requiredStock > 0) {
-                outputData.push({
-                    productName:salesRow.item_name,
-                    code: salesRow.code,
-                    requiredStock,
-                    actualStock,
-                    salesQty,
-                    currentStock,
-                    warehouseQty,
-                    packing,
-
-                });
+        if (billCount > 1) {
+            const stockPer = (actualStock / salesQty) * 100;
+            if (salesQty > 60) {
+                requiredStock = stockPer > predicationGT60 ? 0 : (salesQty * (18 / 61)) - actualStock;
+            } else if (salesQty > 6) {
+                requiredStock = stockPer > predicationLT60 ? 0 : (salesQty * (38 / 61)) - actualStock;
+            } else {
+                requiredStock = stockPer > predicationLT6 ? 0 : (salesQty * (55 / 61)) - actualStock;
             }
+
+            requiredStock = Math.max(0, requiredStock);
+            requiredStock = (packing > 1 && packing < 31)
+                ? (requiredStock + currentStock < 4 ? 5 - currentStock : requiredStock)
+                : requiredStock;
+
+            const exactRequiredQty = requiredStock;
+
+            if (category === 'GENERIC') {
+                roundedToPacksLoose = Math.ceil(requiredStock / packing) * packing;
+            } else {
+                roundedToPacksLoose = Math.floor(requiredStock / packing) * packing;
+            }
+            actualPacksRequired = roundedToPacksLoose / packing;
+            if (packing !== 1) {
+                wholesalePacks = Math.ceil(actualPacksRequired / 10) * 10;
+            } else {
+                wholesalePacks = actualPacksRequired;
+            }
+        } else {
+            reason += " |Bill Count <=1";
         }
 
-        // Generate Excel output
-        const outputSheet = XLSX.utils.json_to_sheet(outputData);
-        const outputWorkbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(outputWorkbook, outputSheet, 'RequiredStock');
-        const outputFilePath = `output/RequiredStock_${Date.now()}.xlsx`;
-        XLSX.writeFile(outputWorkbook, outputFilePath);
+        if (salesRow.item_name !== "") {
+            outputData.push({
+                category,
+                code: salesRow.code,
+                productName: salesRow.item_name,
+                packing,
+                salesQty,
+                currentStock,
+                billCount,
+                'recent_transfer': warehouseQty,
+                'actual_required': requiredStock,
+                'rounded_to_packs': roundedToPacksLoose,
+                'actual_pack_required': actualPacksRequired,
+                'rounded_to_wholesales': wholesalePacks,
+                'Reason': reason,
+            });
+        }
+    }
+
+    outputData.sort((a, b) => b.actual_required - a.actual_required || b.salesQty - a.salesQty);
+
+    
+
+    return outputData;
+};
+
+// Generates an Excel file from data
+const generateOutputFile = (data, sheetName = 'RequiredStock') => {
+    const outputSheet = XLSX.utils.json_to_sheet(data);
+    const outputWorkbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(outputWorkbook, outputSheet, sheetName);
+    const outputFilePath = `output/${sheetName}_${Date.now()}.xlsx`;
+    XLSX.writeFile(outputWorkbook, outputFilePath);
+    return outputFilePath;
+};
+
+// Main Route
+
+router.post('/generate', async (req, res) => {
+    try {
+        const { branch_id, salesFilePath, warehouseFilePath, removedFilePath } = req.body;
+
+        validateRequest(branch_id, salesFilePath, warehouseFilePath);
+
+        const priorityItems = await PriorityItems.find({});
+        const removedData = readExcelFile(removedFilePath, 0, 1);
+
+        const salesOrder = await createSalesOrder(branch_id);
+
+        const salesData = readExcelFile(salesFilePath, 0, 2);
+        const salesHeaders = salesData.shift();
+        const salesReports = processSalesReport(salesData, salesHeaders, branch_id, salesOrder._id);
+        await SalesReport.insertMany(salesReports);
+
+        const warehouseData = readExcelFile(warehouseFilePath, 0, 2);
+        const warehouseReports = processWarehouseReport(warehouseData, branch_id, salesOrder._id);
+        await WarehouseReport.insertMany(warehouseReports);
+
+        const predicationParams = {
+            predicationGT60: (12 / 61) * 100,
+            predicationLT60: (15 / 61) * 100,
+            predicationLT6: (29.9 / 61) * 100,
+        };
+
+        const outputData = calculateRequiredStock(salesReports, warehouseReports, removedData, predicationParams,priorityItems);
+        const outputFilePath = generateOutputFile(outputData);
 
         res.status(200).json({
             message: 'Sales order generated successfully',
@@ -257,6 +337,9 @@ router.post('/generate', async (req, res) => {
         res.status(500).json({ message: 'Internal server error', error: err.message });
     }
 });
+
+module.exports = router;
+
 
 
 
