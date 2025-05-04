@@ -1,20 +1,41 @@
+// Import dependencies
 const express = require('express');
 const path = require('path');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const User = require('./models/user');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const bodyParser = require('body-parser');
-const dataRoutes = require('./routes/dataRoutes'); // Make sure this path is correct
-const removedMedicinesRoute = require('./routes/removedMedicines'); // Import new route
+
+// Import models and routes
+const User = require('./models/user');
+const dataRoutes = require('./routes/dataRoutes');
+const removedMedicinesRoute = require('./routes/removedMedicines');
+
+// Constants
 const JWT_SECRET = 'your_secret_key';
-
-
-const app = express();
 const PORT = 3000;
-app.use(express.json());
+const mongoURI = 'mongodb+srv://nadeem:fBPgykqU6nU0sh50@cluster0.fzlceka.mongodb.net/budget?retryWrites=true&w=majority';
 
+// Initialize Express app
+const app = express();
+
+// Middleware
+app.use(express.json());
+app.use(cors());
+app.use(bodyParser.json());
+app.use(express.static(path.join(__dirname, 'public')));
+app.use((req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store'); // Disable caching
+  next();
+});
+
+// MongoDB connection
+mongoose.connect(mongoURI)
+  .then(() => console.log('MongoDB connection successful!'))
+  .catch((err) => console.error('MongoDB connection error:', err));
+
+// Routes
 app.post('/register', async (req, res) => {
   const { username, password } = req.body;
 
@@ -30,22 +51,21 @@ app.post('/register', async (req, res) => {
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
 
-  const user = await User.findOne({ username });
-  if (!user) {
-    return res.status(400).json({ error: 'Invalid username or password' });
-  }
+  try {
+    const user = await User.findOne({ username });
+    if (!user || !(await bcrypt.compare(password, user.password))) {
+      return res.status(400).json({ error: 'Invalid username or password' });
+    }
 
-  const isPasswordValid = await bcrypt.compare(password, user.password);
-  if (!isPasswordValid) {
-    return res.status(400).json({ error: 'Invalid username or password' });
-  }
+    if (!user.isActive) {
+      return res.status(403).json({ error: 'Account is inactive. Contact admin.' });
+    }
 
-  if (!user.isActive) {
-    return res.status(403).json({ error: 'Account is inactive. Contact admin.' });
+    const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: '1h' });
+    res.json({ token });
+  } catch (error) {
+    res.status(500).json({ error: 'Login failed!' });
   }
-
-  const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: '1h' });
-  res.json({ token });
 });
 
 const authMiddleware = (req, res, next) => {
@@ -63,55 +83,24 @@ const authMiddleware = (req, res, next) => {
   }
 };
 
-
 app.get('/protected', authMiddleware, (req, res) => {
   res.json({ message: 'This is a protected route' });
 });
 
-
-
-
-// MongoDB connection string (make sure it’s correct for your setup)
-app.use(express.static(path.join(__dirname, 'public')));
-
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-  });
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
-  app.get('/removed-medicines', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'removedMedicines.html'));
-  });
+app.get('/removed-medicines', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'removedMedicines.html'));
+});
 
-
-const mongoURI = 'mongodb+srv://nadeem:fBPgykqU6nU0sh50@cluster0.fzlceka.mongodb.net/budget?retryWrites=true&w=majority';
-    
-
-app.use((req, res, next) => {
-    res.setHeader('Cache-Control', 'no-store');  // Disable caching
-    next();
-  });
-  
-
-
-  mongoose.connect(mongoURI)
-      .then(() => {
-          console.log('MongoDB connection successful!');
-      })
-      .catch((err) => {
-          console.error('MongoDB connection error:', err);
-      });
-
-// Middleware
-app.use(cors());
-app.use(bodyParser.json());
-
-// Register routes (Ensure this is correctly registering your route)
+// Register API routes
 app.use('/api', dataRoutes);
-app.use('/api/removed-medicines', removedMedicinesRoute); // Add new route
-
+app.use('/api/removed-medicines', removedMedicinesRoute);
 
 // Start server
 app.listen(PORT, () => {
-    console.log(`Server running at http://localhost:${PORT}`);
+  console.log(`Server running at http://localhost:${PORT}`);
 });
 
