@@ -8,144 +8,58 @@
 <body>
     <h1>Branch Reports</h1>
 
-    <!-- Dropdown for branches -->
-    <label for="branch">Select Branch:</label>
-    <select id="branch"></select>
+    <!-- Authentication Section -->
+    <div id="auth-container">
+        <div id="login-form">
+            <h2>Login</h2>
+            <input type="text" id="login-username" placeholder="Username" required />
+            <input type="password" id="login-password" placeholder="Password" required />
+            <button id="login-btn">Login</button>
+            <p id="login-message"></p>
+        </div>
+        <div id="register-form" style="display: none;">
+            <h2>Register</h2>
+            <input type="text" id="reg-username" placeholder="Username" required />
+            <input type="password" id="reg-password" placeholder="Password" required />
+            <button id="register-btn">Register</button>
+            <p id="reg-message"></p>
+        </div>
+        <button id="toggle-auth-btn">Switch to Register</button>
+    </div>
 
-    <!-- Upload sales report -->
-    <h2>Upload Sales Report</h2>
-    <form id="sales-form">
-        <input type="file" id="sales-file" name="file" accept=".xls,.xlsx" required />
-        <button type="submit">Upload Sales Report</button>
-    </form>
+    <!-- Main Content -->
+    <div id="main-content" style="display: none;">
+        <!-- Dropdown for branches -->
+        <label for="branch">Select Branch:</label>
+        <select id="branch"></select>
 
-    <!-- Upload warehouse report -->
-    <h2>Upload Warehouse Report</h2>
-    <form id="warehouse-form">
-        <input type="file" id="warehouse-file" name="file" accept=".xls,.xlsx" required />
-        <button type="submit">Upload Warehouse Report</button>
-    </form>
+        <!-- Upload sales report -->
+        <h2>Upload Sales Report</h2>
+        <form id="sales-form">
+            <input type="file" id="sales-file" name="file" accept=".xls,.xlsx" required />
+            <button type="submit">Upload Sales Report</button>
+        </form>
 
-    <!-- Upload Removed Items -->
-    <h2>Upload Removed Items</h2>
-    <form id="removed-items-form">
-        <input type="file" id="removed-file" name="file" accept=".xls,.xlsx" required />
-        <button type="submit">Upload Removed Item List</button>
-    </form>
+        <!-- Upload warehouse report -->
+        <h2>Upload Warehouse Report</h2>
+        <form id="warehouse-form">
+            <input type="file" id="warehouse-file" name="file" accept=".xls,.xlsx" required />
+            <button type="submit">Upload Warehouse Report</button>
+        </form>
 
-    <!-- Generate button -->
-    <h2>Generate Sales Order</h2>
-    <button id="generate-button">Generate</button>
+        <!-- Upload Removed Items -->
+        <h2>Upload Removed Items</h2>
+        <form id="removed-items-form">
+            <input type="file" id="removed-file" name="file" accept=".xls,.xlsx" required />
+            <button type="submit">Upload Removed Item List</button>
+        </form>
 
-    <script>
-        // Populate branch dropdown
-        fetch('http://localhost:3000/api/branches')
-            .then(response => response.json())
-            .then(branches => {
-                const dropdown = document.getElementById('branch');
-                branches.forEach(branch => {
-                    const option = document.createElement('option');
-                    option.value = branch._id;
-                    option.textContent = branch.name;
-                    dropdown.appendChild(option);
-                });
-            });
+        <!-- Generate button -->
+        <h2>Generate Sales Order</h2>
+        <button id="generate-button">Generate</button>
+        <button id="logout-btn">Logout</button>
+    </div>
 
-        // Temporary storage for uploaded files
-        let uploadedSalesFile = null;
-        let uploadedWarehouseFile = null;
-        let uploadedRemoveFile = null;
-
-        // Handle sales report upload
-        document.getElementById('sales-form').addEventListener('submit', event => {
-            event.preventDefault();
-            const fileInput = document.getElementById('sales-file');
-            const formData = new FormData();
-            formData.append('file', fileInput.files[0]);
-
-            fetch('http://localhost:3000/api/upload/temp', {
-                method: 'POST',
-                body: formData,
-            })
-            .then(response => response.json())
-            .then(data => {
-                alert('Sales report uploaded successfully!');
-                uploadedSalesFile = data.tempFilePath; // Save the temporary file path
-            })
-            .catch(console.error);
-        });
-
-        // Handle warehouse report upload
-        document.getElementById('warehouse-form').addEventListener('submit', event => {
-            event.preventDefault();
-            const fileInput = document.getElementById('warehouse-file');
-            const formData = new FormData();
-            formData.append('file', fileInput.files[0]);
-
-            fetch('http://localhost:3000/api/upload/temp', {
-                method: 'POST',
-                body: formData,
-            })
-            .then(response => response.json())
-            .then(data => {
-                alert('Warehouse report uploaded successfully!');
-                uploadedWarehouseFile = data.tempFilePath; // Save the temporary file path
-            })
-            .catch(console.error);
-        });
-
-
-        // Handle removed items upload
-        document.getElementById('removed-items-form').addEventListener('submit', event => {
-            event.preventDefault();
-            const fileInput = document.getElementById('removed-file');
-            const formData = new FormData();
-            formData.append('file', fileInput.files[0]);
-
-            fetch('http://localhost:3000/api/upload/temp', {
-                method: 'POST',
-                body: formData,
-            })
-            .then(response => response.json())
-            .then(data => {
-                alert('remvoed itemd uploaded successfully!');
-                uploadedRemoveFile = data.tempFilePath; // Save the temporary file path
-            })
-            .catch(console.error);
-        });
-
-        // Handle generate button click
-        document.getElementById('generate-button').addEventListener('click', () => {
-            const branchId = document.getElementById('branch').value;
-
-            if (!branchId) {
-                alert('Please select a branch');
-                return;
-            }
-
-            if (!uploadedSalesFile || !uploadedWarehouseFile) {
-                alert('Please upload both sales and warehouse reports');
-                return;
-            }
-
-            fetch('http://localhost:3000/api/generate', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    branch_id: branchId,
-                    salesFilePath: uploadedSalesFile,
-                    warehouseFilePath: uploadedWarehouseFile,
-                    removedFilePath : uploadedRemoveFile,
-                }),
-            })
-            .then(response => response.json())
-            .then(data => {
-                alert(data.message);
-            })
-            .catch(console.error);
-        });
-    </script>
+    <script src="./main.js"></script>
 </body>
 </html>

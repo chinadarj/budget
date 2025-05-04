@@ -15,9 +15,7 @@ const upload = multer({ dest: 'uploads/' });
 // Get all branches for dropdown
 router.get('/branches', async (req, res) => {
     try {
-        console.log('Fetching branches...');
         const branches = await Branch.find();
-        console.log('Branches fetched:', branches);
 
         if (!branches || branches.length === 0) {
             console.log('No branches found in database');
@@ -184,10 +182,21 @@ const processSalesReport = (salesData, headers, branch_id, salesOrderId) => {
 
 // Processes warehouse data into the desired format
 const processWarehouseReport = (warehouseData, branch_id, salesOrderId) => {
-    return warehouseData
+
+    const transformedWarehouseData = warehouseData.slice(1).map(row => ({
+        '__EMPTY': row[1],          // BillNo
+        '__EMPTY_1': row[2],        // Bill Date (Excel serial number)
+        '__EMPTY_2': row[3],        // Product Name
+        '__EMPTY_3': row[4],        // Packing
+        '__EMPTY_4': row[5],        // Qty
+        '__EMPTY_5': row[6],        // Free Qty
+        '__EMPTY_6': row[7]         // Amount
+    }));
+
+
+    return transformedWarehouseData
         .map(row => {
             const billDate = new Date(row['__EMPTY_1']);
-            if (row['__EMPTY'] && !isNaN(billDate)) {
                 return {
                     bill_no: row['__EMPTY'] || 'Unknown',
                     bill_date: billDate,
@@ -199,22 +208,24 @@ const processWarehouseReport = (warehouseData, branch_id, salesOrderId) => {
                     branch_id: new mongoose.Types.ObjectId(branch_id),
                     sales_order_generation_id: salesOrderId,
                 };
-            }
             return null;
         })
         .filter(row => row);
 };
 
 // Calculates required stock
-const calculateRequiredStock = (salesReports, warehouseReports, removedData, predicationParams,priorityItems) => {
+const calculateRequiredStock = (salesReports, warehouseReports, removedData, predicationParams, priorityItems) => {
     const { predicationGT60, predicationLT60, predicationLT6 } = predicationParams;
 
     const outputData = [];
     for (const salesRow of salesReports) {
         let reason = "";
 
+        if(salesRow.item_name == "" || salesRow.item_name == null) continue;
         const isRemoved = removedData.some(([removedName]) => removedName === salesRow.item_name);
         if (isRemoved) continue;
+
+        const isPriority = priorityItems.some(item => item.name === salesRow.item_name);
 
         const warehouseRow = warehouseReports.find(w => w.item_name === salesRow.item_name);
         const currentStock = salesRow.stock;
@@ -260,6 +271,10 @@ const calculateRequiredStock = (salesReports, warehouseReports, removedData, pre
         } else {
             reason += " |Bill Count <=1";
         }
+        if(warehouseQty>0) {
+            wholesalePacks = 0;
+            reason+=" Recent transfer exist";
+        }
 
         if (salesRow.item_name !== "") {
             outputData.push({
@@ -276,16 +291,29 @@ const calculateRequiredStock = (salesReports, warehouseReports, removedData, pre
                 'actual_pack_required': actualPacksRequired,
                 'rounded_to_wholesales': wholesalePacks,
                 'Reason': reason,
+                'isPriority': isPriority
             });
         }
     }
 
-    outputData.sort((a, b) => b.actual_required - a.actual_required || b.salesQty - a.salesQty);
-
+    outputData.sort((a, b) => {
+        // Highest priority: actual_required > 0 and isPriority === true
+        if (a.actual_required > 0 && a.isPriority && !(b.actual_required > 0 && b.isPriority)) {
+            return -1;
+        }
+        if (b.actual_required > 0 && b.isPriority && !(a.actual_required > 0 && a.isPriority)) {
+            return 1;
+        }
     
+        // Fallback to original sorting logic
+        return b.actual_required - a.actual_required || b.salesQty - a.salesQty;
+    });
 
-    return outputData;
+    const cleanedOutputData = outputData.map(({ isPriority, ...rest }) => rest);
+
+    return cleanedOutputData;
 };
+
 
 // Generates an Excel file from data
 const generateOutputFile = (data, sheetName = 'RequiredStock') => {
@@ -304,7 +332,7 @@ router.post('/generate', async (req, res) => {
         const { branch_id, salesFilePath, warehouseFilePath, removedFilePath } = req.body;
 
         validateRequest(branch_id, salesFilePath, warehouseFilePath);
-
+        
         const priorityItems = await PriorityItems.find({});
         const removedData = readExcelFile(removedFilePath, 0, 1);
 
@@ -315,10 +343,9 @@ router.post('/generate', async (req, res) => {
         const salesReports = processSalesReport(salesData, salesHeaders, branch_id, salesOrder._id);
         await SalesReport.insertMany(salesReports);
 
-        const warehouseData = readExcelFile(warehouseFilePath, 0, 2);
+        const warehouseData = readExcelFile(warehouseFilePath, 0, 6);
         const warehouseReports = processWarehouseReport(warehouseData, branch_id, salesOrder._id);
         await WarehouseReport.insertMany(warehouseReports);
-
         const predicationParams = {
             predicationGT60: (12 / 61) * 100,
             predicationLT60: (15 / 61) * 100,
