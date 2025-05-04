@@ -1,0 +1,9 @@
+{
+    "rewrites": [
+      { "source": "/", "destination": "/index.html" },
+      { "source": "/removeMedicines", "destination": "/removeMedicines.html" },
+      { "source": "/(.*)", "destination": "/index.html" }
+
+    ]
+  }
+  
