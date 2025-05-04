@@ -6,6 +6,8 @@ const bcrypt = require('bcryptjs');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const bodyParser = require('body-parser');
+require('dotenv').config();
+
 
 // Import models and routes
 const User = require('./models/user');
@@ -15,7 +17,7 @@ const removedMedicinesRoute = require('./routes/removedMedicines');
 // Constants
 const JWT_SECRET = 'your_secret_key';
 const PORT = 3000;
-const mongoURI = 'mongodb+srv://nadeem:fBPgykqU6nU0sh50@cluster0.fzlceka.mongodb.net/budget?retryWrites=true&w=majority';
+const mongoURI = process.env.MONGO_URI || 'mongodb://localhost:27017/your_database_name';
 
 // Initialize Express app
 const app = express();
