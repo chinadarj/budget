@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Branch Reports</title>
+</head>
+<body>
+    <h1>Branch Reports</h1>
+
+    <!-- Main Content -->
+    <div id="main-content" style="display: none;">
+        <!-- Dropdown for branches -->
+        <label for="branch">Select Branch:</label>
+        <select id="branch"></select>
+
+        <!-- Upload sales report -->
+        <h2>Upload Sales Report</h2>
+        <form id="sales-form">
+            <input type="file" id="sales-file" name="file" accept=".xls,.xlsx" required />
+            <button type="submit">Upload Sales Report</button>
+        </form>
+
+        <!-- Upload warehouse report -->
+        <h2>Upload Warehouse Report</h2>
+        <form id="warehouse-form">
+            <input type="file" id="warehouse-file" name="file" accept=".xls,.xlsx" required />
+            <button type="submit">Upload Warehouse Report</button>
+        </form>
+
+        <!-- Upload Removed Items -->
+        <h2>Upload Removed Items</h2>
+        <form id="removed-items-form">
+            <input type="file" id="removed-file" name="file" accept=".xls,.xlsx" required />
+            <button type="submit">Upload Removed Item List</button>
+        </form>
+
+        <!-- Generate button -->
+        <h2>Generate Sales Order</h2>
+        <button id="generate-button">Generate</button>
+        <button id="logout-btn">Logout</button>
+    </div>
+
+    <script src="./main.js"></script>
+</body>
+</html>
