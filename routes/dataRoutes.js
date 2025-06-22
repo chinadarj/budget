@@ -240,14 +240,19 @@ const calculateRequiredStock = (salesReports, warehouseReports, removedData, pre
         let wholesalePacks = 0;
         let actualPacksRequired = 0;
 
+        let salesQtyInPacks = salesQty / packing;
+        let actualStockInPacks = actualStock / packing;
+        let currentStockInPacks = currentStock / packing;
+        let warehouseQtyInPacks = warehouseQty / packing;
+
         if (billCount > 1) {
-            const stockPer = (actualStock / salesQty) * 100;
-            if (salesQty > 60) {
-                requiredStock = stockPer > predicationGT60 ? 0 : (salesQty * (18 / 61)) - actualStock;
-            } else if (salesQty > 6) {
-                requiredStock = stockPer > predicationLT60 ? 0 : (salesQty * (38 / 61)) - actualStock;
+            const stockPer = (actualStockInPacks / salesQtyInPacks) * 100;
+            if (salesQtyInPacks > 60) {
+                requiredStock = stockPer > predicationGT60 ? 0 : (salesQtyInPacks * (18 / 61)) - actualStockInPacks;
+            } else if (salesQtyInPacks > 6) {
+                requiredStock = stockPer > predicationLT60 ? 0 : (salesQtyInPacks * (38 / 61)) - actualStockInPacks;
             } else {
-                requiredStock = stockPer > predicationLT6 ? 0 : (salesQty * (55 / 61)) - actualStock;
+                requiredStock = stockPer > predicationLT6 ? 0 : (salesQtyInPacks * (55 / 61)) - actualStockInPacks;
             }
 
             requiredStock = Math.max(0, requiredStock);
@@ -258,11 +263,11 @@ const calculateRequiredStock = (salesReports, warehouseReports, removedData, pre
             const exactRequiredQty = requiredStock;
 
             if (category === 'GENERIC') {
-                roundedToPacksLoose = Math.ceil(requiredStock / packing) * packing;
+                roundedToPacksLoose = Math.ceil(requiredStock );
             } else {
-                roundedToPacksLoose = Math.floor(requiredStock / packing) * packing;
+                roundedToPacksLoose = Math.floor(requiredStock);
             }
-            actualPacksRequired = roundedToPacksLoose / packing;
+            actualPacksRequired = roundedToPacksLoose ;
             if (packing !== 1) {
                 wholesalePacks = Math.ceil(actualPacksRequired / 10) * 10;
             } else {
@@ -282,8 +287,8 @@ const calculateRequiredStock = (salesReports, warehouseReports, removedData, pre
                 code: salesRow.code,
                 productName: salesRow.item_name,
                 packing,
-                salesQty,
-                currentStock,
+                salesQtyInPacks,
+                currentStockInPacks,
                 billCount,
                 'recent_transfer': warehouseQty,
                 'actual_required': requiredStock,
