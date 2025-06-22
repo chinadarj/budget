@@ -1,3 +1,6 @@
+// Set API base URL
+const API_BASE = 'https://budget-4mvuv2ggo-chinadarjs-projects.vercel.app'; // Change this if backend is hosted elsewhere
+
 const loginForm = document.getElementById('login-form');
 const registerForm = document.getElementById('register-form');
 const authContainer = document.getElementById('auth-container');
@@ -9,6 +12,9 @@ const logoutBtn = document.getElementById('logout-btn');
 const branchDropdown = document.getElementById('branch');
 
 let isLogin = true;
+let uploadedSalesFile = null;
+let uploadedWarehouseFile = null;
+let uploadedRemoveFile = null;
 
 // Switch between login and registration
 toggleAuthBtn.addEventListener('click', () => {
@@ -21,7 +27,7 @@ toggleAuthBtn.addEventListener('click', () => {
 // Fetch branches and populate the dropdown
 const loadBranches = async () => {
     try {
-        const response = await fetch('/api/branches', {
+        const response = await fetch(`${API_BASE}/api/branches`, {
             headers: {
                 Authorization: `Bearer ${localStorage.getItem('authToken')}`,
             },
@@ -30,7 +36,7 @@ const loadBranches = async () => {
             throw new Error('Failed to load branches');
         }
         const branches = await response.json();
-        branchDropdown.innerHTML = ''; // Clear existing options
+        branchDropdown.innerHTML = '';
         branches.forEach(branch => {
             const option = document.createElement('option');
             option.value = branch._id;
@@ -48,7 +54,7 @@ const checkAuth = () => {
     if (token) {
         authContainer.style.display = 'none';
         mainContent.style.display = 'block';
-        loadBranches(); // Load branches after confirming authentication
+        loadBranches();
     } else {
         authContainer.style.display = 'block';
         mainContent.style.display = 'none';
@@ -60,7 +66,7 @@ document.getElementById('register-btn').addEventListener('click', async () => {
     const username = document.getElementById('reg-username').value;
     const password = document.getElementById('reg-password').value;
 
-    const response = await fetch('/register', {
+    const response = await fetch(`${API_BASE}/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
@@ -75,7 +81,7 @@ document.getElementById('login-btn').addEventListener('click', async () => {
     const username = document.getElementById('login-username').value;
     const password = document.getElementById('login-password').value;
 
-    const response = await fetch('/login', {
+    const response = await fetch(`${API_BASE}/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
@@ -85,66 +91,65 @@ document.getElementById('login-btn').addEventListener('click', async () => {
 
     if (response.ok) {
         localStorage.setItem('authToken', data.token);
-        checkAuth(); // Reload content after successful login
+        checkAuth();
     } else {
         loginMessage.textContent = data.error;
     }
 });
 
-
 // Handle sales report upload
 document.getElementById('sales-form').addEventListener('submit', event => {
-    event.preventDefault(); // Prevent page refresh
+    event.preventDefault();
     const fileInput = document.getElementById('sales-file');
     const formData = new FormData();
     formData.append('file', fileInput.files[0]);
 
-    fetch('http://localhost:3000/api/upload/temp', {
+    fetch(`${API_BASE}/api/upload/temp`, {
         method: 'POST',
         body: formData,
     })
         .then(response => response.json())
         .then(data => {
             alert('Sales report uploaded successfully!');
-            uploadedSalesFile = data.tempFilePath; // Save the temporary file path
+            uploadedSalesFile = data.tempFilePath;
         })
         .catch(console.error);
 });
 
 // Handle warehouse report upload
 document.getElementById('warehouse-form').addEventListener('submit', event => {
-    event.preventDefault(); // Prevent page refresh
+    event.preventDefault();
     const fileInput = document.getElementById('warehouse-file');
     const formData = new FormData();
     formData.append('file', fileInput.files[0]);
 
-    fetch('http://localhost:3000/api/upload/temp', {
+    fetch(`${API_BASE}/api/upload/temp`, {
         method: 'POST',
         body: formData,
     })
         .then(response => response.json())
         .then(data => {
             alert('Warehouse report uploaded successfully!');
-            uploadedWarehouseFile = data.tempFilePath; // Save the temporary file path
+            uploadedWarehouseFile = data.tempFilePath;
         })
         .catch(console.error);
 });
 
 // Handle removed items upload
 document.getElementById('removed-items-form').addEventListener('submit', event => {
-    event.preventDefault(); // Prevent page refresh
+    event.preventDefault();
     const fileInput = document.getElementById('removed-file');
     const formData = new FormData();
     formData.append('file', fileInput.files[0]);
 
-    fetch('http://localhost:3000/api/upload/temp', {
+    fetch(`${API_BASE}/api/upload/temp`, {
         method: 'POST',
         body: formData,
     })
         .then(response => response.json())
         .then(data => {
             alert('Removed items uploaded successfully!');
-            uploadedRemoveFile = data.tempFilePath; // Save the temporary file path
+            uploadedRemoveFile = data.tempFilePath;
         })
         .catch(console.error);
 });
@@ -153,31 +158,28 @@ document.getElementById('removed-items-form').addEventListener('submit', event =
 document.getElementById('generate-button').addEventListener('click', async () => {
     const branchId = document.getElementById('branch').value;
 
-    // Check if branch is selected
     if (!branchId) {
         alert('Please select a branch');
         return;
     }
 
-    // Check if required files are uploaded
     if (!uploadedSalesFile || !uploadedWarehouseFile) {
         alert('Please upload both sales and warehouse reports');
         return;
     }
 
     try {
-        // Make a POST request to the "generate" endpoint
-        const response = await fetch('http://localhost:3000/api/generate', {
+        const response = await fetch(`${API_BASE}/api/generate`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                Authorization: `Bearer ${localStorage.getItem('authToken')}`, // Pass the token
+                Authorization: `Bearer ${localStorage.getItem('authToken')}`,
             },
             body: JSON.stringify({
                 branch_id: branchId,
                 salesFilePath: uploadedSalesFile,
                 warehouseFilePath: uploadedWarehouseFile,
-                removedFilePath: uploadedRemoveFile || null, // Optional field
+                removedFilePath: uploadedRemoveFile || null,
             }),
         });
 
@@ -197,10 +199,8 @@ document.getElementById('generate-button').addEventListener('click', async () =>
 // Handle logout
 logoutBtn.addEventListener('click', () => {
     localStorage.removeItem('authToken');
-    checkAuth(); // Redirect to login after logout
+    checkAuth();
 });
 
 // Check authentication on page load
 window.onload = checkAuth;
-
-
