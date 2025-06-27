@@ -1,5 +1,7 @@
 // Set API base URL
-const API_BASE = 'https://budget-4mvuv2ggo-chinadarjs-projects.vercel.app'; // Change this if backend is hosted elsewhere
+// const API_BASE = 'https://budget-4mvuv2ggo-chinadarjs-projects.vercel.app'; // Change this if backend is hosted elsewhere
+const API_BASE = 'http://localhost:3000'; // Change this if backend is hosted elsewhere
+
 
 const loginForm = document.getElementById('login-form');
 const registerForm = document.getElementById('register-form');
@@ -66,7 +68,7 @@ document.getElementById('register-btn').addEventListener('click', async () => {
     const username = document.getElementById('reg-username').value;
     const password = document.getElementById('reg-password').value;
 
-    const response = await fetch(`${API_BASE}/register`, {
+    const response = await fetch(`${API_BASE}/api/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
@@ -81,7 +83,7 @@ document.getElementById('login-btn').addEventListener('click', async () => {
     const username = document.getElementById('login-username').value;
     const password = document.getElementById('login-password').value;
 
-    const response = await fetch(`${API_BASE}/login`, {
+    const response = await fetch(`${API_BASE}/api/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
