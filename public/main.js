@@ -187,15 +187,22 @@ document.getElementById('generate-button').addEventListener('click', async () =>
 
         const data = await response.json();
 
-        if (response.ok) {
-            alert(data.message || 'Sales order generated successfully!');
-        } else {
-            alert(data.error || 'Failed to generate sales order');
-        }
-    } catch (error) {
-        console.error('Error generating sales order:', error);
-        alert('An error occurred while generating the sales order. Please try again.');
-    }
+        if (response.ok && data.outputFilePath) {
+            alert(data.message || 'Report generated successfully!');
+            const downloadUrl = `${API_BASE}/${data.outputFilePath}`;
+            const a = document.createElement('a');
+            a.href = downloadUrl;
+            a.download = ''; // Let browser handle filename
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+                } else {
+                    alert(data.error || 'Failed to generate sales order');
+                }
+            } catch (error) {
+                console.error('Error generating sales order:', error);
+                alert('An error occurred while generating the sales order. Please try again.');
+            }
 });
 
 // Handle logout
