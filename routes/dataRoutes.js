@@ -10,7 +10,8 @@ const mongoose = require('mongoose');
 const PriorityItems = require('../models/priorityItems');
 
 const router = express.Router();
-const upload = multer({ dest: 'uploads/' });
+const upload = multer({ dest: '/tmp/uploads' });
+
 
 // Get all branches for dropdown
 router.get('/branches', async (req, res) => {

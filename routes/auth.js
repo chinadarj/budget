@@ -6,17 +6,20 @@ const bcrypt = require('bcryptjs');
 const User = require('../models/user');
 
 const router = express.Router();
-const JWT_SECRET = 'your_secret_key'; // or use process.env.JWT_SECRET
+const JWT_SECRET = process.env.JWT_SECRET;
 
 // Register
 router.post('/register', async (req, res) => {
     const { username, password } = req.body;
 
     try {
+        console.log('Register body:', req.body);
+
         const user = new User({ username, password });
         await user.save();
         res.status(201).json({ message: 'User registered successfully!' });
     } catch (error) {
+        console.log('error', error)
         res.status(400).json({ error: 'User registration failed!' });
     }
 });
@@ -27,7 +30,9 @@ router.post('/login', async (req, res) => {
 
     try {
         const user = await User.findOne({ username });
+        console.log('User found:', user);
         if (!user || !(await bcrypt.compare(password, user.password))) {
+            console.log('error', req.body)
             return res.status(400).json({ error: 'Invalid username or password' });
         }
 
