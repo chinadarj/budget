@@ -1,4 +1,4 @@
-# Dependency directories
+# Node dependencies
 node_modules/
 
 # Optional npm cache directory
@@ -19,10 +19,6 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 
-# Build output
-dist/
-build/
-
 # IDE and editor files
 .idea/
 .vscode/
@@ -31,9 +27,23 @@ build/
 *.njsproj
 *.sln
 
+# Build output
+dist/
+build/
+
+# Serverless Framework output
+.serverless/
+
 # Coverage data
 coverage/
 
 # Temporary files
 tmp/
 temp/
+
+# React specific (optional, in case you use testing)
+*.tgz
+*.tsbuildinfo
+
+# Mac system metadata files (again, for safety)
+*.swp

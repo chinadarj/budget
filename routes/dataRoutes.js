@@ -1,4 +1,5 @@
 const express = require('express');
+const AWS = require('aws-sdk');
 const multer = require('multer');
 const XLSX = require('xlsx');
 const Branch = require('../models/branch');
@@ -11,6 +12,7 @@ const PriorityItems = require('../models/priorityItems');
 
 const router = express.Router();
 const upload = multer({ dest: '/tmp/uploads' });
+const s3 = new AWS.S3();
 
 
 // Get all branches for dropdown
