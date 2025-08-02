@@ -65,6 +65,13 @@ app.get('/removed-medicines', (req, res) => {
 });
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
-});
+// Export app for Lambda
+module.exports = app;
+
+// Start server locally (ONLY when run directly, not by Lambda)
+if (require.main === module) {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
+}

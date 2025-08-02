@@ -8,7 +8,14 @@ const PriorityItems = require('../models/priorityItems');
 const router = express.Router();
 
 // Configure Multer for file uploads
-const upload = multer({ dest: 'uploads/' });
+const uploadDir = '/tmp/uploads';
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const upload = multer({ dest: uploadDir });
+
+
 
 // Route to handle Excel uploads
 router.post('/upload', upload.single('file'), async (req, res) => {

@@ -1,0 +1,21 @@
+service: budget-api
+#frameworkVersion: '^3.0.0'
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: ap-south-1
+  environment:
+    MONGO_URI: ${env:MONGO_URI}
+    JWT_SECRET: ${env:JWT_SECRET}
+
+functions:
+  app:
+    handler: handler.handler
+    events:
+      - httpApi:
+          path: /{proxy+}
+          method: ANY
+
+plugins:
+  - serverless-offline
