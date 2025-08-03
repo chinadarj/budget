@@ -35,43 +35,44 @@ function Home() {
   };
 
   const handleGenerate = async () => {
-    if (!branchId || !salesPath || !warehousePath) {
-      alert('Please select branch and upload required files');
-      return;
-    }
+  if (!branchId || !salesPath || !warehousePath) {
+    alert('Please select branch and upload required files');
+    return;
+  }
 
-    try {
-      const response = await api.post(
-        '/api/generate',
-        {
-          branch_id: branchId,
-          salesFilePath: salesPath,
-          warehouseFilePath: warehousePath,
-          removedFilePath: removedPath || null,
+  try {
+    const response = await api.post(
+      '/api/generate',
+      {
+        branch_id: branchId,
+        salesFilePath: salesPath,
+        warehouseFilePath: warehousePath,
+        removedFilePath: removedPath || null,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('authToken')}`,
         },
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('authToken')}`,
-          },
-        }
-      );
-
-      if (response.data.outputFilePath) {
-        alert(response.data.message || 'Generated successfully!');
-        const link = document.createElement('a');
-        link.href = `${api.defaults.baseURL}/${response.data.outputFilePath}`;
-        link.download = '';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      } else {
-        alert(response.data.error || 'Error generating file');
       }
-    } catch (error) {
-      console.error('Generate failed:', error);
-      alert('An error occurred');
+    );
+
+    if (response.data.downloadUrl) {
+      alert(response.data.message || 'Generated successfully!');
+      const link = document.createElement('a');
+      link.href = response.data.downloadUrl;
+      link.download = ''; // Let the browser handle filename
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else {
+      alert(response.data.error || 'Error generating file');
     }
-  };
+  } catch (error) {
+    console.error('Generate failed:', error);
+    alert('An error occurred');
+  }
+};
+
 
   if (!isAuthenticated) {
     return (
