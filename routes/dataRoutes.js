@@ -1,5 +1,4 @@
 const express = require('express');
-const AWS = require('aws-sdk');
 const multer = require('multer');
 const XLSX = require('xlsx');
 const Branch = require('../models/branch');
@@ -12,8 +11,14 @@ const PriorityItems = require('../models/priorityItems');
 
 const router = express.Router();
 const upload = multer({ dest: '/tmp/uploads' });
-const s3 = new AWS.S3();
 
+const fs = require('fs');
+const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+
+const REGION = process.env.AWS_REGION || 'ap-south-1';
+const BUCKET_NAME = process.env.AWS_BUCKET_NAME || 'budget-report-downloads'
+const s3Client = new S3Client({ region: REGION });
 
 // Get all branches for dropdown
 router.get('/branches', async (req, res) => {
@@ -323,15 +328,30 @@ const calculateRequiredStock = (salesReports, warehouseReports, removedData, pre
 };
 
 
-// Generates an Excel file from data
+// // Generates an Excel file from data
+// const generateOutputFile = (data, sheetName = 'RequiredStock') => {
+//     const outputSheet = XLSX.utils.json_to_sheet(data);
+//     const outputWorkbook = XLSX.utils.book_new();
+//     XLSX.utils.book_append_sheet(outputWorkbook, outputSheet, sheetName);
+//     //const outputFilePath = `output/${sheetName}_${Date.now()}.xlsx`;
+//     const outputFilePath = `/tmp/${sheetName}_${Date.now()}.xlsx`; 
+//     XLSX.writeFile(outputWorkbook, outputFilePath);
+//     return outputFilePath;
+// };
+
 const generateOutputFile = (data, sheetName = 'RequiredStock') => {
-    const outputSheet = XLSX.utils.json_to_sheet(data);
-    const outputWorkbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(outputWorkbook, outputSheet, sheetName);
-    const outputFilePath = `output/${sheetName}_${Date.now()}.xlsx`;
-    XLSX.writeFile(outputWorkbook, outputFilePath);
-    return outputFilePath;
+  const timestamp = Date.now();
+  const fileName = `${sheetName}_${timestamp}.xlsx`;
+  const filePath = `/tmp/${fileName}`;
+
+  const outputSheet = XLSX.utils.json_to_sheet(data);
+  const outputWorkbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(outputWorkbook, outputSheet, sheetName);
+  XLSX.writeFile(outputWorkbook, filePath);
+
+  return { filePath, fileName }; // return both
 };
+
 
 // Main Route
 
@@ -361,12 +381,42 @@ router.post('/generate', async (req, res) => {
         };
 
         const outputData = calculateRequiredStock(salesReports, warehouseReports, removedData, predicationParams,priorityItems);
-        const outputFilePath = generateOutputFile(outputData);
+        // const outputFilePath = generateOutputFile(outputData);
+
+        // Generate Excel and upload to S3
+        const { filePath, fileName } = generateOutputFile(outputData);
+
+        const fileBuffer = fs.readFileSync(filePath);
+        const s3Key = `outputs/${fileName}`;
+
+        await s3Client.send(
+        new PutObjectCommand({
+            Bucket: BUCKET_NAME,
+            Key: s3Key,
+            Body: fileBuffer,
+            ContentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        })
+        );
+
+        // Get signed URL
+        const command = new GetObjectCommand({
+        Bucket: BUCKET_NAME,
+        Key: s3Key,
+        });
+        const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+
+        console.log(`Successfully returning URL : ${signedUrl}`);
 
         res.status(200).json({
             message: 'Sales order generated successfully',
-            outputFilePath,
+            downloadUrl: signedUrl,
         });
+
+
+        // res.status(200).json({
+        //     message: 'Sales order generated successfully',
+        //     outputFilePath,
+        // });
     } catch (err) {
         console.error('Error during generation:', err);
         res.status(500).json({ message: 'Internal server error', error: err.message });
@@ -375,10 +425,3 @@ router.post('/generate', async (req, res) => {
 
 module.exports = router;
 
-
-
-
-
-
-
-module.exports = router;
