@@ -32,4 +32,4 @@ jobs:
           aws-region: ap-south-1  # Change to your region
 
       - name: Deploy via Serverless
-        run: sls deploy --stage dev
+        run: sls deploy --stage production
