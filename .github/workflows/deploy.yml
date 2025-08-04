@@ -9,7 +9,7 @@ jobs:
   deploy:
     name: Deploy with Serverless
     runs-on: ubuntu-latest
-    environment: Production - budget
+    environment: Production – budget
 
     steps:
       - name: Checkout code
