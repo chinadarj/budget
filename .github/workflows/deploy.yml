@@ -32,4 +32,5 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
           MONGO_URI: ${{ secrets.MONGO_URI }}  # ✅ Required by serverless.yml
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
         run: serverless deploy
