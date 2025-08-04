@@ -23,7 +23,7 @@ const s3Client = new S3Client({ region: REGION });
 // Get all branches for dropdown
 router.get('/branches', async (req, res) => {
     try {
-        const branches = await Branch.find();
+        const branches = await Branch.find().sort({ name: 1 });
 
         if (!branches || branches.length === 0) {
             console.log('No branches found in database');
