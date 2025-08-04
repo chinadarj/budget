@@ -339,9 +339,9 @@ const calculateRequiredStock = (salesReports, warehouseReports, removedData, pre
 //     return outputFilePath;
 // };
 
-const generateOutputFile = (data, sheetName = 'RequiredStock') => {
-  const timestamp = Date.now();
-  const fileName = `${sheetName}_${timestamp}.xlsx`;
+const generateOutputFile = (data, branchName, dateStr, sheetName = 'RequiredStock') => {
+  const sanitizedBranch = branchName.replace(/\s+/g, '_'); // replace spaces with underscores
+  const fileName = `PO_${sanitizedBranch}_${dateStr}.xlsx`;
   const filePath = `/tmp/${fileName}`;
 
   const outputSheet = XLSX.utils.json_to_sheet(data);
@@ -384,7 +384,11 @@ router.post('/generate', async (req, res) => {
         // const outputFilePath = generateOutputFile(outputData);
 
         // Generate Excel and upload to S3
-        const { filePath, fileName } = generateOutputFile(outputData);
+        const branch = await Branch.findById(branch_id);
+        const branchName = branch?.name || 'UnknownBranch';
+        const dateStr = new Date().toISOString().slice(0, 10); // yyyy-mm-dd
+
+        const { filePath, fileName } = generateOutputFile(outputData, branchName, dateStr);
 
         const fileBuffer = fs.readFileSync(filePath);
         const s3Key = `outputs/${fileName}`;
