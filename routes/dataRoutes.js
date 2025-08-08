@@ -414,6 +414,9 @@ router.post('/generate', async (req, res) => {
         res.status(200).json({
             message: 'Sales order generated successfully',
             downloadUrl: signedUrl,
+            branch: branchName,
+            date: dateStr,
+            outputData
         });
 
 
