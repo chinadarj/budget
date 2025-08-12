@@ -231,7 +231,6 @@ const calculateRequiredStock = (salesReports, warehouseReports, removedData, pre
 
         if(salesRow.item_name == "" || salesRow.item_name == null) continue;
         const isRemoved = removedData.some(([removedName]) => removedName === salesRow.item_name);
-        if (isRemoved) continue;
 
         const isPriority = priorityItems.some(item => item.name === salesRow.item_name);
 
