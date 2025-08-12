@@ -232,7 +232,7 @@ const calculateRequiredStock = (salesReports, warehouseReports, removedData, pre
         if(salesRow.item_name == "" || salesRow.item_name == null) continue;
         const isRemoved = removedData.some(([removedName]) => removedName === salesRow.item_name);
 
-        const isPriority = priorityItems.some(item => item.code === salesRow.code);
+        const isPriority = priorityItems.some(item => item.name === salesRow.item_name);
 
         const warehouseRow = warehouseReports.find(w => w.item_name === salesRow.item_name);
         const currentStock = salesRow.stock;
